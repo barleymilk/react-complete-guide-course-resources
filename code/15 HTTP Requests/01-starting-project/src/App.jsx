@@ -1,17 +1,37 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from "react";
 
-import Places from './components/Places.jsx';
-import Modal from './components/Modal.jsx';
-import DeleteConfirmation from './components/DeleteConfirmation.jsx';
-import logoImg from './assets/logo.png';
-import AvailablePlaces from './components/AvailablePlaces.jsx';
+import Places from "./components/Places.jsx";
+import Modal from "./components/Modal.jsx";
+import DeleteConfirmation from "./components/DeleteConfirmation.jsx";
+import logoImg from "./assets/logo.png";
+import AvailablePlaces from "./components/AvailablePlaces.jsx";
+import { fetchUserPlaces, updateUserPlaces } from "./http.js";
+import Error from "./components/Error.jsx";
 
 function App() {
   const selectedPlace = useRef();
 
   const [userPlaces, setUserPlaces] = useState([]);
+  const [isFetching, setIsFetching] = useState(false);
+  const [error, setError] = useState();
+  const [errorUpdatingPlaces, setErrorUpdatingPlaces] = useState();
 
   const [modalIsOpen, setModalIsOpen] = useState(false);
+
+  // 데이터 가져오기
+  useEffect(() => {
+    async function fetchPlaces() {
+      setIsFetching(true);
+      try {
+        const places = await fetchUserPlaces();
+        setUserPlaces(places);
+      } catch (error) {
+        setError({ message: error.message || "Failed to fetch user places." });
+      }
+      setIsFetching(false);
+    }
+    fetchPlaces();
+  }, []);
 
   function handleStartRemovePlace(place) {
     setModalIsOpen(true);
@@ -22,7 +42,11 @@ function App() {
     setModalIsOpen(false);
   }
 
-  function handleSelectPlace(selectedPlace) {
+  async function handleSelectPlace(selectedPlace) {
+    // 만약 아래 코드를 이 위치에 넣는다면 해당 코드가 실행될 때까지 다음 코드가 돌아가지 않는다.
+    // 따라서 앱이 멈춘 것처럼 보이지 않기 위해 로딩 스피너를 넣어줘야 한다.
+    // await updateUserPlaces([selectedPlace, ...userPlaces]);
+
     setUserPlaces((prevPickedPlaces) => {
       if (!prevPickedPlaces) {
         prevPickedPlaces = [];
@@ -32,18 +56,56 @@ function App() {
       }
       return [selectedPlace, ...prevPickedPlaces];
     });
+
+    try {
+      await updateUserPlaces([selectedPlace, ...userPlaces]);
+    } catch (error) {
+      setUserPlaces(userPlaces); // 낙관적 업데이트: 이전 상태를 그대로 사용
+      setErrorUpdatingPlaces({
+        message: error.message || "Failed to update places.",
+      });
+    }
   }
 
-  const handleRemovePlace = useCallback(async function handleRemovePlace() {
-    setUserPlaces((prevPickedPlaces) =>
-      prevPickedPlaces.filter((place) => place.id !== selectedPlace.current.id)
-    );
+  const handleRemovePlace = useCallback(
+    async function handleRemovePlace() {
+      setUserPlaces((prevPickedPlaces) =>
+        prevPickedPlaces.filter(
+          (place) => place.id !== selectedPlace.current.id
+        )
+      );
 
-    setModalIsOpen(false);
-  }, []);
+      try {
+        await updateUserPlaces(
+          userPlaces.filter((place) => place.id !== selectedPlace.current.id)
+        );
+      } catch (error) {
+        setUserPlaces(userPlaces);
+        setErrorUpdatingPlaces(
+          { message: error.message } || "Failed to delete user data."
+        );
+      }
+      setModalIsOpen(false);
+    },
+    [userPlaces]
+  );
+
+  function handleError() {
+    setErrorUpdatingPlaces(null);
+  }
 
   return (
     <>
+      {/* 장소 업데이트 error 발생시 */}
+      <Modal open={errorUpdatingPlaces} onClose={handleError}>
+        {errorUpdatingPlaces && (
+          <Error
+            title="An error occurred!"
+            message={errorUpdatingPlaces.message}
+            onConfirm={handleError}
+          />
+        )}
+      </Modal>
       <Modal open={modalIsOpen} onClose={handleStopRemovePlace}>
         <DeleteConfirmation
           onCancel={handleStopRemovePlace}
@@ -60,13 +122,17 @@ function App() {
         </p>
       </header>
       <main>
-        <Places
-          title="I'd like to visit ..."
-          fallbackText="Select the places you would like to visit below."
-          places={userPlaces}
-          onSelectPlace={handleStartRemovePlace}
-        />
-
+        {error && <Error title="An error occured!" message={error.message} />}
+        {!error && (
+          <Places
+            title="I'd like to visit ..."
+            fallbackText="Select the places you would like to visit below."
+            isLoading={isFetching}
+            loadingText="Fetching your places..."
+            places={userPlaces}
+            onSelectPlace={handleStartRemovePlace}
+          />
+        )}
         <AvailablePlaces onSelectPlace={handleSelectPlace} />
       </main>
     </>
