@@ -1,39 +1,27 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect } from "react";
 
-import Places from './components/Places.jsx';
-import Modal from './components/Modal.jsx';
-import DeleteConfirmation from './components/DeleteConfirmation.jsx';
-import logoImg from './assets/logo.png';
-import AvailablePlaces from './components/AvailablePlaces.jsx';
-import { fetchUserPlaces, updateUserPlaces } from './http.js';
-import Error from './components/Error.jsx';
+import Places from "./components/Places.jsx";
+import Modal from "./components/Modal.jsx";
+import DeleteConfirmation from "./components/DeleteConfirmation.jsx";
+import logoImg from "./assets/logo.png";
+import AvailablePlaces from "./components/AvailablePlaces.jsx";
+import { fetchUserPlaces, updateUserPlaces } from "./http.js";
+import Error from "./components/Error.jsx";
+
+import { useFetch } from "./hooks/useFetch.js"; // 추가
 
 function App() {
   const selectedPlace = useRef();
 
-  const [userPlaces, setUserPlaces] = useState([]);
-  const [isFetching, setIsFetching] = useState(false);
-  const [error, setError] = useState();
-
   const [errorUpdatingPlaces, setErrorUpdatingPlaces] = useState();
-
   const [modalIsOpen, setModalIsOpen] = useState(false);
 
-  useEffect(() => {
-    async function fetchPlaces() {
-      setIsFetching(true);
-      try {
-        const places = await fetchUserPlaces();
-        setUserPlaces(places);
-      } catch (error) {
-        setError({ message: error.message || 'Failed to fetch user places.' });
-      }
-
-      setIsFetching(false);
-    }
-
-    fetchPlaces();
-  }, []);
+  const {
+    isFetching,
+    fetchedData: userPlaces,
+    setFetchedData: setUserPlaces,
+    error,
+  } = useFetch(fetchUserPlaces, []); // 추가
 
   function handleStartRemovePlace(place) {
     setModalIsOpen(true);
@@ -45,8 +33,6 @@ function App() {
   }
 
   async function handleSelectPlace(selectedPlace) {
-    // await updateUserPlaces([selectedPlace, ...userPlaces]);
-
     setUserPlaces((prevPickedPlaces) => {
       if (!prevPickedPlaces) {
         prevPickedPlaces = [];
@@ -62,7 +48,7 @@ function App() {
     } catch (error) {
       setUserPlaces(userPlaces);
       setErrorUpdatingPlaces({
-        message: error.message || 'Failed to update places.',
+        message: error.message || "Failed to update places.",
       });
     }
   }
@@ -82,13 +68,13 @@ function App() {
       } catch (error) {
         setUserPlaces(userPlaces);
         setErrorUpdatingPlaces({
-          message: error.message || 'Failed to delete place.',
+          message: error.message || "Failed to delete place.",
         });
       }
 
       setModalIsOpen(false);
     },
-    [userPlaces]
+    [userPlaces, setUserPlaces] // 상태 업데이트 함수를 의존성에 추가 - 달라지는 것은 없음. 리액트는 상태 업데이트함수가 절대 변하지 않음을 보장하기 때문
   );
 
   function handleError() {
